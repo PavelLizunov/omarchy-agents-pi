@@ -14,7 +14,7 @@ collectors come from the Omarchy distribution. There is no standalone installer
 or release package here; use this source only with the native Omarchy plugin
 system and compatible usage records. No setup command is executed automatically.
 
-The current comparison base is stable Omarchy `v4.0.4`, commit
+The initial comparison base is stable Omarchy `v4.0.4`, commit
 `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`. All nine original Agents files match
 that release byte-for-byte. This establishes a reproducible update base, not
 historical fork ancestry. [Provenance](docs/PROVENANCE.md) explains the test adapters.

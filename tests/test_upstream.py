@@ -3,7 +3,9 @@
 import importlib.util
 import json
 from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('upstream', Path(__file__).resolve().parents[1] / 'scripts/upstream.py')
 upstream = importlib.util.module_from_spec(spec)
@@ -56,6 +58,51 @@ class UpstreamContracts(unittest.TestCase):
                 upstream.validate(dict(baseline(), **{name: b'bad'}))
         with self.assertRaises(ValueError):
             upstream.validate(dict(baseline(), **{'Panel.qml': b'x' * (upstream.LIMIT + 1)}))
+
+    def test_snapshot_symlink_refused(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            (root / 'link').symlink_to(root / 'outside')
+            with self.assertRaisesRegex(ValueError, 'symlink'):
+                upstream.read_files(root)
+
+    def test_prepare_patch_and_conflict_atomicity(self):
+        for conflict in [False, True]:
+            with self.subTest(conflict=conflict), tempfile.TemporaryDirectory() as scratch:
+                root = Path(scratch) / 'repo'
+                root.mkdir()
+                base = baseline()
+                ours = dict(base, **{'Panel.qml': b'local panel\n'})
+                theirs = dict(base, **{'Panel.qml': b'upstream panel\n'}) if conflict else dict(
+                    base, **{'Main.qml': b'updated main\n'})
+                old = {'repository': upstream.REPOSITORY, 'tag': 'v1.0.0',
+                       'commit': 'a' * 40, 'files': upstream.hashes(base)}
+                new = dict(old, tag='v1.0.1', commit='b' * 40, files=upstream.hashes(theirs))
+                for prefix, files in [('', ours), ('.upstream/agents/', base)]:
+                    for name, content in files.items():
+                        path = root / (prefix + name)
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(content)
+                (root / '.upstream/base.json').write_text(json.dumps(old))
+                upstream.git(root, 'init', '-q', '-b', 'main')
+                upstream.git(root, 'config', 'user.name', 'Test')
+                upstream.git(root, 'config', 'user.email', 'test@users.noreply.github.com')
+                upstream.git(root, 'add', '--all')
+                upstream.git(root, 'commit', '-qm', 'Baseline')
+                output = Path(scratch) / 'update.patch'
+                with patch.object(upstream, 'ROOT', root), patch.object(upstream, 'fetch_stable', return_value=(new, theirs)):
+                    if conflict:
+                        with self.assertRaisesRegex(ValueError, 'merge failed'):
+                            upstream.prepare(output)
+                        self.assertEqual(upstream.git(root, 'status', '--porcelain').stdout, '')
+                        self.assertEqual((root / 'Panel.qml').read_bytes(), ours['Panel.qml'])
+                        self.assertFalse(output.exists())
+                    else:
+                        upstream.prepare(output)
+                        self.assertIn('Main.qml', output.read_text())
+                        self.assertEqual((root / 'Panel.qml').read_bytes(), ours['Panel.qml'])
+                        self.assertEqual((root / 'Main.qml').read_bytes(), theirs['Main.qml'])
+                        self.assertEqual(json.loads((root / '.upstream/base.json').read_text()), new)
 
     def test_entrypoint_change_refused(self):
         files = baseline()
