@@ -1,0 +1,31 @@
+name: Isolated Agents verification
+description: Static contracts, offline updater checks and exact-source Qt tests
+runs:
+  using: composite
+  steps:
+    - name: Static and offline checks
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 -B tests/check.py
+        python3 -B tests/test_runner.py
+        python3 -B tests/test_upstream.py
+        git diff --check
+    - name: Install CI-only Qt dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update -q
+        sudo apt-get install -y --no-install-recommends libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libfontconfig1 libgl1 fonts-dejavu-core fonts-noto-core
+        python3 -m venv "$RUNNER_TEMP/aqt"
+        "$RUNNER_TEMP/aqt/bin/pip" install 'aqtinstall==3.3.0' 'py7zr==1.1.0'
+        "$RUNNER_TEMP/aqt/bin/python" -m aqt install-qt linux desktop 6.8.3 linux_gcc_64 --outputdir "$RUNNER_TEMP/qt"
+    - name: Parse QML and run offscreen consumer
+      shell: bash
+      run: |
+        set -euo pipefail
+        qt="$RUNNER_TEMP/qt/6.8.3/gcc_64"
+        for file in Agent.qml Main.qml Panel.qml; do
+          "$qt/bin/qmlformat" "$file" >/dev/null
+        done
+        python3 -B tests/run.py --qmltestrunner "$qt/bin/qmltestrunner" --output-parent "$RUNNER_TEMP/agents-evidence"
