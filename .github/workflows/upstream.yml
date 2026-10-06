@@ -1,0 +1,79 @@
+name: Stable upstream update
+on:
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: stable-upstream-update
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Merge and test stable candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      changed: ${{ steps.prepare.outputs.changed }}
+      base: ${{ steps.prepare.outputs.base }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "base=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          python3 -B scripts/upstream.py prepare --patch "$RUNNER_TEMP/update.patch"
+          if test -s "$RUNNER_TEMP/update.patch"; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: ./.github/actions/verify
+        if: steps.prepare.outputs.changed == 'true'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: steps.prepare.outputs.changed == 'true'
+        with:
+          name: tested-upstream-patch
+          path: ${{ runner.temp }}/update.patch
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && steps.prepare.outputs.changed == 'true'
+        with:
+          name: upstream-test-evidence
+          path: ${{ runner.temp }}/agents-evidence
+          if-no-files-found: ignore
+          retention-days: 14
+  publish:
+    name: Open manually reviewed PR
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.prepare.outputs.base }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: tested-upstream-patch
+          path: ${{ runner.temp }}/patch
+      - name: Publish bounded patch and explicitly dispatch CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_BASE: ${{ needs.prepare.outputs.base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(git ls-remote origin refs/heads/main | cut -f1)
+          if test "$current" != "$EXPECTED_BASE"; then
+            echo 'main changed during verification; rerun required' >&2
+            exit 1
+          fi
+          python3 -B scripts/upstream.py publish --patch "$RUNNER_TEMP/patch/update.patch"

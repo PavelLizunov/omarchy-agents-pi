@@ -206,12 +206,6 @@ Panel {
     return dayName(date)
   }
 
-  function cacheHitText(day) {
-    var value = day ? day.cacheHitRate : null
-    return typeof value === "number" && isFinite(value) && value >= 0 && value <= 1
-      ? (value * 100).toFixed(1) + "%" : "—"
-  }
-
   function dayTooltip(day, today) {
     if (!day) return ""
     var parsed = new Date(String(day.date) + "T00:00:00")
@@ -219,9 +213,6 @@ Panel {
       ? String(day.date)
       : dayName(day.date) + " " + (parsed.getMonth() + 1) + "/" + parsed.getDate()
     var text = label + " · " + usage.formatTokenCount(Number(day.messageCount || 0)) + " tokens"
-    if (provider && provider.providerId === "pi")
-      text += " · Cache hit " + cacheHitText(day) + " · local day"
-        + "\nCached input / (uncached input + cached input + cache writes); output excluded"
     // Prompt and session counts only exist for today, so they ride along here
     // instead of taking a section of their own. Billing-API agents never
     // count prompts, and "0 prompts" would read as a quiet day, not a gap.
@@ -296,7 +287,6 @@ Panel {
   // if it doesn't.
   function iconCandidatesForProvider(p, surfaceColor) {
     if (!p) return []
-    if (p.providerId === "pi") return [Qt.resolvedUrl("assets/pi.svg")]
     var candidates = []
     if (colorLuminance(surfaceColor || Color.background) >= 0.5)
       candidates.push(Qt.resolvedUrl("assets/" + p.providerId + "-light.svg"))
@@ -439,17 +429,8 @@ Panel {
                   fillMode: Image.PreserveAspectFit
                   // Advancing source from inside its own status change trips the
                   // binding-loop detector; defer the step one tick.
-                  onStatusChanged: if (status === Image.Error && heroMark.candidateIndex < heroMark.candidates.length) {
-                    var failedSource = String(source)
-                    var failedIndex = heroMark.candidateIndex
-                    Qt.callLater(function() {
-                      if (heroMarkImage.status === Image.Error
-                          && String(heroMarkImage.source) === failedSource
-                          && heroMark.candidateIndex === failedIndex
-                          && String(heroMark.candidates[failedIndex]) === failedSource)
-                        heroMark.candidateIndex++
-                    })
-                  }
+                  onStatusChanged: if (status === Image.Error && heroMark.candidateIndex < heroMark.candidates.length)
+                    Qt.callLater(function() { heroMark.candidateIndex++ })
                 }
 
                 Text {
@@ -647,7 +628,7 @@ Panel {
 
             PanelSectionHeader {
               width: parent.width
-              text: root.provider && root.provider.providerId === "pi" ? "TOKENS BY DAY · CACHE HIT" : "TOKENS BY DAY"
+              text: "TOKENS BY DAY"
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -820,8 +801,6 @@ Panel {
     property var day: null
     property real ratio: 0
     property bool today: false
-    readonly property bool showCache: !!root.provider && root.provider.providerId === "pi"
-    objectName: "dayRow-" + (day ? day.date : "")
 
     implicitHeight: Math.max(dayLabel.implicitHeight, dayValue.implicitHeight) + Style.spacing.sm
 
@@ -872,29 +851,9 @@ Panel {
       font.pixelSize: Style.font.caption
       font.bold: true
       horizontalAlignment: Text.AlignRight
-      anchors.right: dayCache.left
-      anchors.rightMargin: dayRow.showCache ? Style.space(12) : 0
-      anchors.verticalCenter: parent.verticalCenter
-      width: Style.space(52)
-    }
-
-    Text {
-      id: dayCache
-      objectName: "dayCache-" + (dayRow.day ? dayRow.day.date : "")
-      visible: dayRow.showCache
-      width: dayRow.showCache ? Style.space(60) : 0
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
-      textFormat: Text.PlainText
-      text: root.cacheHitText(dayRow.day)
-      color: dayRow.today ? root.foreground : root.dim
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.caption
-      font.bold: true
-      horizontalAlignment: Text.AlignRight
-      Accessible.role: Accessible.StaticText
-      Accessible.name: root.dayLabel(dayRow.day ? dayRow.day.date : "", dayRow.today)
-        + " cache hit " + text
+      width: Style.space(52)
     }
 
     MouseArea {
