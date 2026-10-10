@@ -36,12 +36,17 @@ Panel {
   // panel keeps telling the truth while it sits open.
   property double nowMs: Date.now()
 
-  readonly property var limits: limitWindows(provider)
+  readonly property var limits: {
+    var revision = usage.dataRevision
+    return gateway ? gatewayLimits() : limitWindows(provider)
+  }
   readonly property var models: modelRows(provider)
-  readonly property var headline: bindingWindow(provider)
+  readonly property var headline: gateway ? null : bindingWindow(provider)
   readonly property var balance: provider ? (provider.balance || null) : null
   readonly property var gateway: provider ? (provider.gateway || null) : null
-  property bool gatewayDetails: false
+  property string gatewaySource: "gemini"
+  property int gatewayAccountIndex: 0
+  readonly property var gatewayCodexAccounts: gateway ? gateway.accounts.filter(function(a) { return a.provider === "codex"; }) : []
   // A prepaid account runs low the way a subscription window fills up: the
   // last 10% of the funded credits lights the same alarm.
   readonly property bool balanceAlarming: !!balance && balance.funded > 0
@@ -57,32 +62,42 @@ Panel {
     selectedProviderId = providers[wrapped].providerId
   }
 
-  function gatewayRemaining(window) {
-    var value = window ? window.remainingPercent : null
-    return typeof value === "number" && isFinite(value) && value >= 0 && value <= 100
-      ? Math.round(value) + "% remaining" : "Remaining unknown"
+  function gatewayLimits(source, accountIndex, data) {
+    data = data || gateway
+    if (!data) return []
+    source = source || gatewaySource
+    accountIndex = accountIndex === undefined ? gatewayAccountIndex : accountIndex
+    if (source === "codex") {
+      var accounts = data.accounts.filter(function(a) { return a.provider === "codex"; })
+      var account = accounts[accountIndex]
+      if (!account || account.status === "error" || account.status === "disabled") return []
+      return account.windows.map(function(w) {
+        var seconds = Number(String(w.key || "").split(":").pop())
+        return {title: seconds === 604800 ? "Weekly" : seconds === 18000 ? "Session (5h)" : String(w.label),
+          percent: typeof w.remainingPercent === "number" && isFinite(w.remainingPercent) && w.remainingPercent >= 0 && w.remainingPercent <= 100 ? 1 - w.remainingPercent / 100 : -1,
+          resetAt: String(w.resetsAt || "")}
+      }).sort(function(a, b) { return (a.title === "Weekly" ? 1 : 0) - (b.title === "Weekly" ? 1 : 0); })
+    }
+    var prefix = source === "gemini" ? "gemini-" : "3p-"
+    return data.pools.filter(function(p) { return String(p.model || "").indexOf(prefix) === 0; }).map(function(p) {
+      return {title: String(p.model).endsWith("weekly") ? "Weekly" : "Session (5h)",
+        percent: typeof p.available === "number" && isFinite(p.available) && typeof p.total === "number" && isFinite(p.total) && p.total > 0 && p.available >= 0 && p.available <= p.total ? 1 - p.available / p.total : -1,
+        resetAt: String(p.resetsAt || "")}
+    }).sort(function(a, b) { return (a.title === "Weekly" ? 1 : 0) - (b.title === "Weekly" ? 1 : 0); })
   }
 
-  function gatewayQuotaLabel(quota) {
-    var key = String(quota.model || quota.key || "")
-    var match = key.match(/(?:^|:)(gemini|3p)-(weekly|5h)(?::|$)/)
-    if (match) return (match[1] === "gemini" ? "Gemini" : "Claude & GPT")
-      + " · " + (match[2] === "weekly" ? "Weekly allowance" : "5-hour allowance")
-    var codex = key.match(/^codex:([^:]+):(primary|secondary):(\d+)$/)
-    if (codex) return (codex[1] === "code" ? "Codex" : codex[1]) + " · "
-      + (Number(codex[3]) === 604800 ? "Weekly allowance"
-         : Number(codex[3]) === 18000 ? "5-hour allowance"
-         : Number(codex[3]) / 3600 + "-hour allowance")
-    return String(quota.label || "Quota details unavailable")
+  function gatewayName() {
+    return gatewaySource === "gemini" ? "Gemini" : gatewaySource === "3p" ? "Claude & GPT" : "Codex"
   }
 
-  function gatewayPoolText(pool) {
-    var available = pool ? pool.available : null
-    var total = pool ? pool.total : null
-    return typeof available === "number" && isFinite(available)
-      && typeof total === "number" && isFinite(total) && total > 0
-      && available >= 0 && available <= total
-      ? Math.round(available / total * 100) + "% remaining across accounts" : "Remaining unknown"
+  function gatewayPlan() {
+    if (gatewaySource === "codex") {
+      var account = gatewayCodexAccounts[gatewayAccountIndex]
+      return account ? "OpenAI · " + String(account.plan || "Subscription") + (account.status === "error" || account.status === "disabled" ? " · " + account.status : "") : "Unavailable"
+    }
+    var prefix = gatewaySource === "gemini" ? "gemini-" : "3p-"
+    var plans = gateway ? gateway.pools.filter(function(p) { return String(p.model).indexOf(prefix) === 0; }).map(function(p) { return p.plan; }) : []
+    return "Antigravity · " + (plans.length > 0 ? plans[0] || "Subscription" : "Unavailable")
   }
 
   function refreshNow() {
@@ -327,7 +342,8 @@ Panel {
   function iconCandidatesForProvider(p, surfaceColor) {
     if (!p) return []
     if (p.providerId === "pi") return [Qt.resolvedUrl("assets/pi.svg")]
-    if (p.providerId === "gateway") return []
+    if (p.providerId === "gateway") return root.gatewaySource === "3p" ? [Qt.resolvedUrl("assets/claude.svg")]
+      : root.gatewaySource === "codex" ? [Qt.resolvedUrl(colorLuminance(surfaceColor || Color.background) >= 0.5 ? "assets/codex-light.svg" : "assets/codex.svg")] : []
     var candidates = []
     if (colorLuminance(surfaceColor || Color.background) >= 0.5)
       candidates.push(Qt.resolvedUrl("assets/" + p.providerId + "-light.svg"))
@@ -379,8 +395,12 @@ Panel {
         gatewayAvailable: !!(gatewayProvider && gatewayProvider.ready),
         gatewayAccounts: gatewayProvider && gatewayProvider.gateway ? gatewayProvider.gateway.accounts.length : 0,
         gatewayUpdatedAt: gatewayProvider ? gatewayProvider.updatedAt : "",
-        gatewayQuotaLabels: gatewayProvider && gatewayProvider.gateway
-          ? gatewayProvider.gateway.pools.map(function(p) { return root.gatewayQuotaLabel(p); }) : []})
+        gatewaySource: root.gatewaySource,
+        gatewayWindows: gatewayProvider ? {
+          gemini: root.gatewayLimits("gemini", 0, gatewayProvider.gateway),
+          antigravityClaudeGPT: root.gatewayLimits("3p", 0, gatewayProvider.gateway),
+          codex: root.gatewayLimits("codex", 0, gatewayProvider.gateway)} : {},
+        gatewayNativeRows: true})
     }
     function next(): string { root.selectProvider(root.providerIndex + 1); return "ok" }
   }
@@ -449,8 +469,8 @@ Panel {
             id: hero
             visible: !!root.provider
             width: parent.width
-            title: root.provider ? root.provider.providerName : ""
-            meta: root.heroMeta(root.provider)
+            title: root.gateway && root.provider.ready ? root.gatewayName() : root.provider ? root.provider.providerName : ""
+            meta: root.gateway && root.provider.ready ? root.gatewayPlan() : root.heroMeta(root.provider)
             foreground: root.foreground
             fontFamily: root.fontFamily
 
@@ -551,6 +571,39 @@ Panel {
                 onHovered: function(isHovered) { if (isHovered) root.cursorActive = true }
               }
             }
+          }
+
+          Row {
+            visible: !!root.gateway && root.provider.ready
+            width: parent.width
+            spacing: Style.spacing.md
+            Repeater {
+              model: [{id: "gemini", name: "Gemini"}, {id: "3p", name: "Claude/GPT"}, {id: "codex", name: "Codex"}]
+              Button {
+                required property var modelData
+                width: (parent.width - 2 * Style.spacing.md) / 3
+                text: modelData.name
+                selected: root.gatewaySource === modelData.id
+                bordered: true
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                verticalPadding: Style.spacing.controlPaddingY
+                onClicked: { root.gatewaySource = modelData.id; panelFlick.contentY = 0 }
+              }
+            }
+          }
+
+          Button {
+            visible: !!root.gateway && root.gatewaySource === "codex" && root.gatewayCodexAccounts.length > 1
+            width: parent.width
+            text: "Account " + (root.gatewayAccountIndex + 1) + " of " + root.gatewayCodexAccounts.length
+            bordered: true
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            verticalPadding: Style.spacing.controlPaddingY
+            onClicked: root.gatewayAccountIndex = (root.gatewayAccountIndex + 1) % root.gatewayCodexAccounts.length
           }
 
           // ---------- Status ----------
@@ -667,134 +720,6 @@ Panel {
                 width: limitsSection.width
                 window: modelData
               }
-            }
-          }
-
-          // ---------- Gateway subscription pool and account diagnostics ----------
-          PanelSeparator { visible: !!root.gateway; foreground: root.foreground }
-
-          Column {
-            visible: !!root.gateway
-            width: parent.width
-            spacing: Style.spacing.md
-
-            PanelSectionHeader {
-              text: "ANTIGRAVITY · SHARED ALLOWANCES"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              text: "Gemini and Claude/GPT use separate pools. Each has a weekly and a 5-hour allowance. Both apply when you use a model.\nCodex subscriptions are listed in account details."
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: Text.WordWrap
-            }
-
-            Repeater {
-              model: root.gateway ? root.gateway.pools : []
-              Column {
-                required property var modelData
-                width: parent.width
-                spacing: Style.space(6)
-                Text {
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  text: root.gatewayQuotaLabel(modelData)
-                  objectName: "gatewayQuota-" + String(modelData.model || modelData.key || "unknown")
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                  wrapMode: Text.WordWrap
-                }
-                Meter { width: parent.width; value: modelData.available / modelData.total }
-                Text {
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  text: root.gatewayPoolText(modelData)
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  wrapMode: Text.WordWrap
-                }
-                Text {
-                  visible: text !== ""
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  text: modelData.resetsAt ? "Next reset in " + root.formatDuration(new Date(modelData.resetsAt).getTime() - root.nowMs) : ""
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                }
-              }
-            }
-
-            Button {
-              width: parent.width
-              text: root.gatewayDetails ? "Hide subscriptions and issues" : "Subscriptions and issues"
-              bordered: true
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              fontSize: Style.font.bodySmall
-              onClicked: root.gatewayDetails = !root.gatewayDetails
-            }
-
-            Column {
-              visible: root.gatewayDetails
-              width: parent.width
-              spacing: Style.spacing.md
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: root.gateway ? root.gateway.accounts.length + " accounts · " + root.gateway.errors + " errors · " + root.gateway.disabled + " disabled\nError and disabled accounts are excluded from the shared pool." : ""
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
-              }
-              Repeater {
-                model: root.gatewayDetails && root.gateway ? root.gateway.accounts : []
-                Column {
-                  required property var modelData
-                  width: parent.width
-                  spacing: Style.space(6)
-                  Text {
-                    width: parent.width
-                    textFormat: Text.PlainText
-                    text: modelData.account + (modelData.plan ? " · " + modelData.plan : "") + " · " + modelData.status
-                    color: modelData.status === "error" ? root.urgent : root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    wrapMode: Text.WordWrap
-                  }
-                  Repeater {
-                    model: modelData.windows
-                    Text {
-                      required property var modelData
-                      width: parent.width
-                      textFormat: Text.PlainText
-                      text: root.gatewayQuotaLabel(modelData) + ": " + root.gatewayRemaining(modelData)
-                        + (modelData.resetsAt ? " · resets in " + root.formatDuration(new Date(modelData.resetsAt).getTime() - root.nowMs) : "")
-                      color: root.dim
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.caption
-                      wrapMode: Text.WordWrap
-                    }
-                  }
-                }
-              }
-            }
-            Text {
-              width: parent.width
-              textFormat: Text.PlainText
-              text: root.provider && root.provider.updatedAt ? "Updated " + root.provider.updatedAt : ""
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: Text.WordWrap
             }
           }
 

@@ -17,16 +17,19 @@ system and compatible usage records. No setup command is executed automatically.
 ## AI Gateway subscription limits
 
 An optional `gateway` record adds a separate AI Gateway tab. It displays the
-Antigravity pool with explicit Gemini or Claude/GPT model-group labels and weekly
-or 5-hour allowances. The main view shows one rounded remaining percentage per
-pool; it is calculated from available account-equivalents divided by compatible
-accounts, not a token balance or the quota of any single account. Provider keys
+subscription limits using the same native hero and limit rows as Claude Code.
+Gemini and Claude/GPT are separate Antigravity quota pools; Codex is a separate
+OpenAI subscription source, with an account switch rather than averaged quotas.
+Only the selected source's windows are shown. Percentages mean used allowance,
+matching the existing Claude Code page; missing quota stays unknown. Antigravity
+pool usage is one minus available account-equivalents divided by compatible
+accounts. It is not a token balance or any single account's quota. Provider keys
 and model IDs are retained because upstream display labels can be identical.
-Subscription plans, issues and per-account Antigravity, Codex and xAI windows
-remain in the expandable details. Local
+No custom dashboard, verbose explanations or expandable account lists are shown. Local
 Codex and OpenCode records are excluded from this clone's tabs and update commands;
 those exclusions do not control subscriptions inside the gateway.
-Unknown remaining quota stays unknown; error and disabled counts remain visible.
+Unknown remaining quota stays unknown; an errored or disabled Codex account has
+no quota bars and its status appears in the existing plan line.
 The pool is not a token or billing balance. Existing Pi and Claude views are unchanged.
 
 `scripts/gateway-usage.py` runs the existing DSH collector over a configured,

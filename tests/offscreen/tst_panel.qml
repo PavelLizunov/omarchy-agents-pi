@@ -168,37 +168,57 @@ Item {
 
     function test_gateway_contract() {
       var usage = find(panel, function(x) { return typeof x.displayProvider === "function"; })
-      usage.agents = [{record: {id: "gateway", name: "AI Gateway", ready: true,
-        limits: [], gateway: {accounts: [{provider: "codex", authIndex: "fixture", account: "codex 1",
-          plan: "pro", status: "available", windows: [{label: "Weekly", remainingPercent: 0}]}],
-          pools: [{model: "gemini-weekly", key: "antigravity:gemini-weekly:", label: "Weekly Limit Remaining", plan: "pro", total: 2, available: 1.25},
-            {model: "3p-weekly", key: "antigravity:3p-weekly:", label: "Weekly Limit Remaining", plan: "pro", total: 2, available: 1.25}], errors: 0, disabled: 0}}}]
+      usage.agents = [{record: {id: "gateway", name: "AI Gateway", ready: true, limits: [], gateway: {
+        accounts: [{provider: "codex", authIndex: "one", plan: "plus", status: "available",
+          windows: [{key: "codex:code:primary:18000", remainingPercent: 0}, {key: "codex:code:secondary:604800", remainingPercent: 40}]},
+          {provider: "codex", authIndex: "two", plan: "pro", status: "available",
+          windows: [{key: "codex:code:primary:604800", remainingPercent: 80}]}],
+        pools: [{model: "gemini-weekly", plan: "pro", total: 2, available: 1.5},
+          {model: "gemini-5h", plan: "pro", total: 2, available: 1},
+          {model: "3p-weekly", plan: "pro", total: 2, available: 0.5},
+          {model: "3p-5h", plan: "pro", total: 2, available: 1.8}], errors: 0, disabled: 0}}}]
       usage.recordsChanged()
       compare(panel.providers.length, 1)
       compare(panel.provider.providerId, "gateway")
-      compare(panel.gatewayRemaining({remainingPercent: 0}), "0% remaining")
-      compare(panel.gatewayRemaining({remainingPercent: null}), "Remaining unknown")
-      compare(panel.gatewayPoolText(panel.gateway.pools[0]), "63% remaining across accounts")
-      compare(panel.gatewayPoolText({available: null, total: 2}), "Remaining unknown")
-      compare(panel.gatewayPoolText({available: 0, total: 2}), "0% remaining across accounts")
-      compare(panel.gatewayQuotaLabel(panel.gateway.pools[0]), "Gemini · Weekly allowance")
-      compare(panel.gatewayQuotaLabel(panel.gateway.pools[1]), "Claude & GPT · Weekly allowance")
-      compare(panel.gatewayQuotaLabel({model: "gemini-5h"}), "Gemini · 5-hour allowance")
-      compare(panel.gatewayQuotaLabel({key: "antigravity:3p-5h:"}), "Claude & GPT · 5-hour allowance")
-      compare(panel.gatewayQuotaLabel({key: "codex:code:primary:18000"}), "Codex · 5-hour allowance")
-      compare(panel.gatewayQuotaLabel({label: "Unrecognized provider quota"}), "Unrecognized provider quota")
       panel.open()
-      var button = find(panel, function(x) { return x.text === "Subscriptions and issues" && x.clicked !== undefined; })
-      verify(button !== null)
-      button.clicked()
-      compare(panel.gatewayDetails, true)
-      verify(find(panel, function(x) { return x.text === "Weekly: 0% remaining"; }) !== null)
-      button.clicked()
-      compare(panel.gatewayDetails, false)
-      usage.agents = [{record: {id: "gateway", name: "AI Gateway", limits: [], usageStatusText: "Gateway limits unavailable",
-        authHelpText: "Could not read subscription limits", gateway: {accounts: [], pools: [], errors: 0, disabled: 0}}}]
+      compare(panel.gatewayName(), "Gemini")
+      compare(panel.limits.length, 2)
+      compare(panel.limits[0].title, "Session (5h)")
+      compare(panel.limits[0].percent, 0.5)
+      compare(panel.limits[1].percent, 0.25)
+      var switchButton = find(panel, function(x) { return x.text === "Claude/GPT" && x.clicked !== undefined; })
+      verify(switchButton !== null)
+      switchButton.clicked()
+      compare(panel.gatewayName(), "Claude & GPT")
+      compare(panel.limits.length, 2)
+      fuzzyCompare(panel.limits[0].percent, 0.1, 0.0001)
+      compare(panel.limits[1].percent, 0.75)
+      switchButton = find(panel, function(x) { return x.text === "Codex" && x.clicked !== undefined; })
+      verify(switchButton !== null)
+      switchButton.clicked()
+      compare(panel.gatewayName(), "Codex")
+      compare(panel.gatewayPlan(), "OpenAI · plus")
+      compare(panel.limits.length, 2)
+      compare(panel.limits[0].percent, 1)
+      var accountButton = find(panel, function(x) { return x.text === "Account 1 of 2" && x.clicked !== undefined; })
+      verify(accountButton !== null)
+      accountButton.clicked()
+      compare(panel.gatewayPlan(), "OpenAI · pro")
+      compare(panel.limits.length, 1)
+      compare(panel.limits[0].title, "Weekly")
+      fuzzyCompare(panel.limits[0].percent, 0.2, 0.0001)
+      usage.agents[0].record.gateway.accounts[1].windows[0].remainingPercent = null
       usage.recordsChanged()
-      compare(panel.providers.length, 1)
+      compare(panel.limits[0].percent, -1)
+      usage.agents[0].record.gateway.accounts[1].status = "disabled"
+      usage.recordsChanged()
+      compare(panel.gatewayLimits().length, 0)
+      compare(panel.gatewayPlan(), "OpenAI · pro · disabled")
+      verify(find(panel, function(x) { return x.text === "Subscriptions and issues"; }) === null)
+      usage.agents = [{record: {id: "gateway", name: "AI Gateway", ready: false, limits: [],
+        usageStatusText: "Gateway limits unavailable", gateway: {accounts: [], pools: []}}}]
+      usage.recordsChanged()
+      compare(panel.limits.length, 0)
       compare(panel.heroMeta(panel.provider), "Gateway limits unavailable")
       panel.close()
     }
