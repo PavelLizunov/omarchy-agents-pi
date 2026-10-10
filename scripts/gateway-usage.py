@@ -44,7 +44,7 @@ def adapt(data):
             if not isinstance(window, dict):
                 raise ValueError('Invalid account window')
             remaining = window.get('remainingPercent')
-            windows.append({'label': text(window.get('label'), 'Limit'),
+            windows.append({'key': text(window.get('key')), 'label': text(window.get('label'), 'Limit'),
                             'remainingPercent': remaining if finite(remaining) and 0 <= remaining <= 100 else None,
                             'resetsAt': text(window.get('resetsAt'))})
         accounts.append({'provider': raw['provider'], 'authIndex': identity[1],
@@ -57,7 +57,8 @@ def adapt(data):
         total, available = group.get('total'), group.get('available')
         if not finite(total) or not finite(available) or total <= 0 or not 0 <= available <= total:
             raise ValueError('Invalid pool capacity')
-        pools.append({'label': text(group.get('label'), 'Antigravity'), 'plan': text(group.get('plan')),
+        pools.append({'key': text(group.get('key')), 'model': text(group.get('model')),
+                      'label': text(group.get('label'), 'Antigravity'), 'plan': text(group.get('plan')),
                       'total': total, 'available': available, 'resetsAt': text(group.get('resetsAt'))})
     errors = sum(a['status'] == 'error' for a in accounts)
     disabled = sum(a['status'] == 'disabled' for a in accounts)

@@ -63,8 +63,26 @@ Panel {
       ? Math.round(value) + "% remaining" : "Remaining unknown"
   }
 
+  function gatewayQuotaLabel(quota) {
+    var key = String(quota.model || quota.key || "")
+    var match = key.match(/(?:^|:)(gemini|3p)-(weekly|5h)(?::|$)/)
+    if (match) return (match[1] === "gemini" ? "Gemini" : "Claude & GPT")
+      + " · " + (match[2] === "weekly" ? "Weekly allowance" : "5-hour allowance")
+    var codex = key.match(/^codex:([^:]+):(primary|secondary):(\d+)$/)
+    if (codex) return (codex[1] === "code" ? "Codex" : codex[1]) + " · "
+      + (Number(codex[3]) === 604800 ? "Weekly allowance"
+         : Number(codex[3]) === 18000 ? "5-hour allowance"
+         : Number(codex[3]) / 3600 + "-hour allowance")
+    return String(quota.label || "Quota details unavailable")
+  }
+
   function gatewayPoolText(pool) {
-    return Number(pool.available).toFixed(2) + " of " + Number(pool.total) + " account-equivalents available"
+    var available = pool ? pool.available : null
+    var total = pool ? pool.total : null
+    return typeof available === "number" && isFinite(available)
+      && typeof total === "number" && isFinite(total) && total > 0
+      && available >= 0 && available <= total
+      ? Math.round(available / total * 100) + "% remaining across accounts" : "Remaining unknown"
   }
 
   function refreshNow() {
@@ -360,7 +378,9 @@ Panel {
       return JSON.stringify({providers: root.providers.map(function(p) { return p.providerId; }),
         gatewayAvailable: !!(gatewayProvider && gatewayProvider.ready),
         gatewayAccounts: gatewayProvider && gatewayProvider.gateway ? gatewayProvider.gateway.accounts.length : 0,
-        gatewayUpdatedAt: gatewayProvider ? gatewayProvider.updatedAt : ""})
+        gatewayUpdatedAt: gatewayProvider ? gatewayProvider.updatedAt : "",
+        gatewayQuotaLabels: gatewayProvider && gatewayProvider.gateway
+          ? gatewayProvider.gateway.pools.map(function(p) { return root.gatewayQuotaLabel(p); }) : []})
     }
     function next(): string { root.selectProvider(root.providerIndex + 1); return "ok" }
   }
@@ -659,7 +679,7 @@ Panel {
             spacing: Style.spacing.md
 
             PanelSectionHeader {
-              text: "GATEWAY SUBSCRIPTIONS"
+              text: "ANTIGRAVITY · SHARED ALLOWANCES"
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -667,7 +687,7 @@ Panel {
             Text {
               width: parent.width
               textFormat: Text.PlainText
-              text: root.gateway ? root.gateway.accounts.length + " accounts · " + root.gateway.errors + " errors · " + root.gateway.disabled + " disabled" : ""
+              text: "Gemini and Claude/GPT use separate pools. Each has a weekly and a 5-hour allowance. Both apply when you use a model.\nCodex subscriptions are listed in account details."
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -683,7 +703,8 @@ Panel {
                 Text {
                   width: parent.width
                   textFormat: Text.PlainText
-                  text: modelData.label + (modelData.plan ? " · " + modelData.plan : "")
+                  text: root.gatewayQuotaLabel(modelData)
+                  objectName: "gatewayQuota-" + String(modelData.model || modelData.key || "unknown")
                   color: root.foreground
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
@@ -713,7 +734,7 @@ Panel {
 
             Button {
               width: parent.width
-              text: root.gatewayDetails ? "Hide account details" : "Show account details"
+              text: root.gatewayDetails ? "Hide subscriptions and issues" : "Subscriptions and issues"
               bordered: true
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -725,6 +746,15 @@ Panel {
               visible: root.gatewayDetails
               width: parent.width
               spacing: Style.spacing.md
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.gateway ? root.gateway.accounts.length + " accounts · " + root.gateway.errors + " errors · " + root.gateway.disabled + " disabled\nError and disabled accounts are excluded from the shared pool." : ""
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
               Repeater {
                 model: root.gatewayDetails && root.gateway ? root.gateway.accounts : []
                 Column {
@@ -746,7 +776,7 @@ Panel {
                       required property var modelData
                       width: parent.width
                       textFormat: Text.PlainText
-                      text: modelData.label + ": " + root.gatewayRemaining(modelData)
+                      text: root.gatewayQuotaLabel(modelData) + ": " + root.gatewayRemaining(modelData)
                         + (modelData.resetsAt ? " · resets in " + root.formatDuration(new Date(modelData.resetsAt).getTime() - root.nowMs) : "")
                       color: root.dim
                       font.family: root.fontFamily

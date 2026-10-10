@@ -26,6 +26,17 @@ class GatewayTest(unittest.TestCase):
         self.assertEqual(result['id'], 'gateway')
         self.assertEqual(result['limits'], [])
 
+    def test_repeated_labels_retain_model_identity(self):
+        data = self.data()
+        data['groups'] = [dict(label='Weekly Limit Remaining', plan='pro', total=2, available=1.25,
+                               model=model, key='antigravity:' + model + ':')
+                          for model in ('gemini-weekly', '3p-weekly')]
+        data['accounts'][0]['windows'][0]['key'] = 'codex:code:secondary:604800'
+        result = gateway.adapt(data)['gateway']
+        self.assertEqual([p['model'] for p in result['pools']], ['gemini-weekly', '3p-weekly'])
+        self.assertNotEqual(result['pools'][0]['key'], result['pools'][1]['key'])
+        self.assertEqual(result['accounts'][0]['windows'][0]['key'], 'codex:code:secondary:604800')
+
     def test_invalid_pool_and_identity(self):
         for bad in [None, True, -1, 3, float('nan')]:
             data = self.data(); data['groups'][0]['available'] = bad

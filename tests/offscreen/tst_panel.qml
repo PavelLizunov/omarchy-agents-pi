@@ -171,15 +171,24 @@ Item {
       usage.agents = [{record: {id: "gateway", name: "AI Gateway", ready: true,
         limits: [], gateway: {accounts: [{provider: "codex", authIndex: "fixture", account: "codex 1",
           plan: "pro", status: "available", windows: [{label: "Weekly", remainingPercent: 0}]}],
-          pools: [{label: "Gemini weekly", plan: "pro", total: 2, available: 1.25}], errors: 0, disabled: 0}}}]
+          pools: [{model: "gemini-weekly", key: "antigravity:gemini-weekly:", label: "Weekly Limit Remaining", plan: "pro", total: 2, available: 1.25},
+            {model: "3p-weekly", key: "antigravity:3p-weekly:", label: "Weekly Limit Remaining", plan: "pro", total: 2, available: 1.25}], errors: 0, disabled: 0}}}]
       usage.recordsChanged()
       compare(panel.providers.length, 1)
       compare(panel.provider.providerId, "gateway")
       compare(panel.gatewayRemaining({remainingPercent: 0}), "0% remaining")
       compare(panel.gatewayRemaining({remainingPercent: null}), "Remaining unknown")
-      compare(panel.gatewayPoolText(panel.gateway.pools[0]), "1.25 of 2 account-equivalents available")
+      compare(panel.gatewayPoolText(panel.gateway.pools[0]), "63% remaining across accounts")
+      compare(panel.gatewayPoolText({available: null, total: 2}), "Remaining unknown")
+      compare(panel.gatewayPoolText({available: 0, total: 2}), "0% remaining across accounts")
+      compare(panel.gatewayQuotaLabel(panel.gateway.pools[0]), "Gemini · Weekly allowance")
+      compare(panel.gatewayQuotaLabel(panel.gateway.pools[1]), "Claude & GPT · Weekly allowance")
+      compare(panel.gatewayQuotaLabel({model: "gemini-5h"}), "Gemini · 5-hour allowance")
+      compare(panel.gatewayQuotaLabel({key: "antigravity:3p-5h:"}), "Claude & GPT · 5-hour allowance")
+      compare(panel.gatewayQuotaLabel({key: "codex:code:primary:18000"}), "Codex · 5-hour allowance")
+      compare(panel.gatewayQuotaLabel({label: "Unrecognized provider quota"}), "Unrecognized provider quota")
       panel.open()
-      var button = find(panel, function(x) { return x.text === "Show account details" && x.clicked !== undefined; })
+      var button = find(panel, function(x) { return x.text === "Subscriptions and issues" && x.clicked !== undefined; })
       verify(button !== null)
       button.clicked()
       compare(panel.gatewayDetails, true)

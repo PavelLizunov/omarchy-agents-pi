@@ -17,8 +17,13 @@ system and compatible usage records. No setup command is executed automatically.
 ## AI Gateway subscription limits
 
 An optional `gateway` record adds a separate AI Gateway tab. It displays the
-Antigravity pool as available account-equivalents, grouped by plan and quota
-window, and expandable per-account Antigravity, Codex and xAI windows. Local
+Antigravity pool with explicit Gemini or Claude/GPT model-group labels and weekly
+or 5-hour allowances. The main view shows one rounded remaining percentage per
+pool; it is calculated from available account-equivalents divided by compatible
+accounts, not a token balance or the quota of any single account. Provider keys
+and model IDs are retained because upstream display labels can be identical.
+Subscription plans, issues and per-account Antigravity, Codex and xAI windows
+remain in the expandable details. Local
 Codex and OpenCode records are excluded from this clone's tabs and update commands;
 those exclusions do not control subscriptions inside the gateway.
 Unknown remaining quota stays unknown; error and disabled counts remain visible.
