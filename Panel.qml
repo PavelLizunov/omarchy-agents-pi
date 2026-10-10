@@ -40,6 +40,8 @@ Panel {
   readonly property var models: modelRows(provider)
   readonly property var headline: bindingWindow(provider)
   readonly property var balance: provider ? (provider.balance || null) : null
+  readonly property var gateway: provider ? (provider.gateway || null) : null
+  property bool gatewayDetails: false
   // A prepaid account runs low the way a subscription window fills up: the
   // last 10% of the funded credits lights the same alarm.
   readonly property bool balanceAlarming: !!balance && balance.funded > 0
@@ -53,6 +55,16 @@ Panel {
     if (providers.length === 0) return
     var wrapped = ((index % providers.length) + providers.length) % providers.length
     selectedProviderId = providers[wrapped].providerId
+  }
+
+  function gatewayRemaining(window) {
+    var value = window ? window.remainingPercent : null
+    return typeof value === "number" && isFinite(value) && value >= 0 && value <= 100
+      ? Math.round(value) + "% remaining" : "Remaining unknown"
+  }
+
+  function gatewayPoolText(pool) {
+    return Number(pool.available).toFixed(2) + " of " + Number(pool.total) + " account-equivalents available"
   }
 
   function refreshNow() {
@@ -297,6 +309,7 @@ Panel {
   function iconCandidatesForProvider(p, surfaceColor) {
     if (!p) return []
     if (p.providerId === "pi") return [Qt.resolvedUrl("assets/pi.svg")]
+    if (p.providerId === "gateway") return []
     var candidates = []
     if (colorLuminance(surfaceColor || Color.background) >= 0.5)
       candidates.push(Qt.resolvedUrl("assets/" + p.providerId + "-light.svg"))
@@ -342,6 +355,13 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function refresh(): string { root.refreshNow(); return "ok" }
+    function status(): string {
+      var gatewayProvider = root.providers.filter(function(p) { return p.providerId === "gateway"; })[0]
+      return JSON.stringify({providers: root.providers.map(function(p) { return p.providerId; }),
+        gatewayAvailable: !!(gatewayProvider && gatewayProvider.ready),
+        gatewayAccounts: gatewayProvider && gatewayProvider.gateway ? gatewayProvider.gateway.accounts.length : 0,
+        gatewayUpdatedAt: gatewayProvider ? gatewayProvider.updatedAt : ""})
+    }
     function next(): string { root.selectProvider(root.providerIndex + 1); return "ok" }
   }
 
@@ -627,6 +647,124 @@ Panel {
                 width: limitsSection.width
                 window: modelData
               }
+            }
+          }
+
+          // ---------- Gateway subscription pool and account diagnostics ----------
+          PanelSeparator { visible: !!root.gateway; foreground: root.foreground }
+
+          Column {
+            visible: !!root.gateway
+            width: parent.width
+            spacing: Style.spacing.md
+
+            PanelSectionHeader {
+              text: "GATEWAY SUBSCRIPTIONS"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: root.gateway ? root.gateway.accounts.length + " accounts · " + root.gateway.errors + " errors · " + root.gateway.disabled + " disabled" : ""
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+            }
+
+            Repeater {
+              model: root.gateway ? root.gateway.pools : []
+              Column {
+                required property var modelData
+                width: parent.width
+                spacing: Style.space(6)
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: modelData.label + (modelData.plan ? " · " + modelData.plan : "")
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  wrapMode: Text.WordWrap
+                }
+                Meter { width: parent.width; value: modelData.available / modelData.total }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: root.gatewayPoolText(modelData)
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+                Text {
+                  visible: text !== ""
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: modelData.resetsAt ? "Next reset in " + root.formatDuration(new Date(modelData.resetsAt).getTime() - root.nowMs) : ""
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+            }
+
+            Button {
+              width: parent.width
+              text: root.gatewayDetails ? "Hide account details" : "Show account details"
+              bordered: true
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              fontSize: Style.font.bodySmall
+              onClicked: root.gatewayDetails = !root.gatewayDetails
+            }
+
+            Column {
+              visible: root.gatewayDetails
+              width: parent.width
+              spacing: Style.spacing.md
+              Repeater {
+                model: root.gatewayDetails && root.gateway ? root.gateway.accounts : []
+                Column {
+                  required property var modelData
+                  width: parent.width
+                  spacing: Style.space(6)
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: modelData.account + (modelData.plan ? " · " + modelData.plan : "") + " · " + modelData.status
+                    color: modelData.status === "error" ? root.urgent : root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.WordWrap
+                  }
+                  Repeater {
+                    model: modelData.windows
+                    Text {
+                      required property var modelData
+                      width: parent.width
+                      textFormat: Text.PlainText
+                      text: modelData.label + ": " + root.gatewayRemaining(modelData)
+                        + (modelData.resetsAt ? " · resets in " + root.formatDuration(new Date(modelData.resetsAt).getTime() - root.nowMs) : "")
+                      color: root.dim
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.WordWrap
+                    }
+                  }
+                }
+              }
+            }
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: root.provider && root.provider.updatedAt ? "Updated " + root.provider.updatedAt : ""
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
             }
           }
 

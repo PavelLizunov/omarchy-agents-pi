@@ -10,6 +10,7 @@ runs:
         python3 -B tests/check.py
         python3 -B tests/test_runner.py
         python3 -B tests/test_upstream.py
+        python3 -B tests/test_gateway.py
         git diff --check
     - name: Install CI-only Qt dependencies
       shell: bash

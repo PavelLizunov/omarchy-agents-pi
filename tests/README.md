@@ -6,6 +6,7 @@ Run from the source checkout, not the installed plugin directory:
 python3 -B tests/check.py
 python3 -B tests/test_runner.py
 python3 -B tests/test_upstream.py
+python3 -B tests/test_gateway.py
 python3 -B tests/run.py
 ```
 
@@ -25,7 +26,8 @@ longer needed; the runner does not delete them.
 The runner copies the current project QML and assets, without rewriting the
 consumer, into an isolated fixture. Default checks cover valid and invalid
 cache percentages, Pi priority without reordering other providers, provider
-disabling, selection, left-click toggling, middle-click cycling, four rendered
+disabling, gateway pool/unknown-state formatting and account disclosure, selection,
+left-click toggling, middle-click cycling, four rendered
 states and label clipping. Each test receives a new panel instance. The stdlib guard checks verify
 fixture-tamper and symlink rejection and refuse evidence paths inside source
 or installed plugin directories. They launch no Qt process.

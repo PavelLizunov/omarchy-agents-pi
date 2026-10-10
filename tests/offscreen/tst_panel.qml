@@ -90,18 +90,23 @@ Item {
       var usage = find(panel, function(x) { return typeof x.displayProvider === "function"; })
       verify(usage !== null)
       var a = {record: record("claude", "Claude Code", "Max", 100, 200)}
-      var b = {record: record("codex", "Codex", "Pro", 100, 200)}
-      var c = {record: record("opencode", "OpenCode", "Plan", 100, 200)}
+      var b = {record: record("fixture", "Fixture", "Pro", 100, 200)}
+      var c = {record: record("missing", "Missing", "Plan", 100, 200)}
       var p = {record: record("pi", "Pi", "All-time cache hit 90.0%", 10, 90)}
       for (var order of [[p,a,b,c], [a,p,b,c], [a,b,p,c], [a,b,c,p]]) {
         usage.settings = ({})
         usage.agents = order
         usage.recordsChanged()
-        compare(panel.providers.map(function(x) { return x.providerId; }).join(","), "pi,claude,codex,opencode")
+        compare(panel.providers.map(function(x) { return x.providerId; }).join(","), "pi,claude,fixture,missing")
       }
+      compare(usage.providerEnabled("codex"), false)
+      compare(usage.providerEnabled("opencode"), false)
+      var update = usage.updateCommand("normal")
+      verify(update.indexOf("codex") > 0 && update[update.indexOf("codex") - 1] === "--except")
+      verify(update.indexOf("opencode") > 0 && update[update.indexOf("opencode") - 1] === "--except")
       usage.settings = ({providers: {pi: {enabled: false}}})
       usage.recordsChanged()
-      compare(panel.providers.map(function(x) { return x.providerId; }).join(","), "claude,codex,opencode")
+      compare(panel.providers.map(function(x) { return x.providerId; }).join(","), "claude,fixture,missing")
       usage.settings = ({})
       usage.recordsChanged()
       panel.selectedProviderId = ""
@@ -115,7 +120,7 @@ Item {
       mouseClick(button, button.width / 2, button.height / 2, Qt.MiddleButton)
       compare(panel.provider.providerId, "claude")
       panel.selectProvider(-1)
-      compare(panel.provider.providerId, "opencode")
+      compare(panel.provider.providerId, "missing")
       panel.selectProvider(0)
       usage.agents = [a,p,b,c]
       usage.recordsChanged()
@@ -161,6 +166,34 @@ Item {
       })
     }
 
+    function test_gateway_contract() {
+      var usage = find(panel, function(x) { return typeof x.displayProvider === "function"; })
+      usage.agents = [{record: {id: "gateway", name: "AI Gateway", ready: true,
+        limits: [], gateway: {accounts: [{provider: "codex", authIndex: "fixture", account: "codex 1",
+          plan: "pro", status: "available", windows: [{label: "Weekly", remainingPercent: 0}]}],
+          pools: [{label: "Gemini weekly", plan: "pro", total: 2, available: 1.25}], errors: 0, disabled: 0}}}]
+      usage.recordsChanged()
+      compare(panel.providers.length, 1)
+      compare(panel.provider.providerId, "gateway")
+      compare(panel.gatewayRemaining({remainingPercent: 0}), "0% remaining")
+      compare(panel.gatewayRemaining({remainingPercent: null}), "Remaining unknown")
+      compare(panel.gatewayPoolText(panel.gateway.pools[0]), "1.25 of 2 account-equivalents available")
+      panel.open()
+      var button = find(panel, function(x) { return x.text === "Show account details" && x.clicked !== undefined; })
+      verify(button !== null)
+      button.clicked()
+      compare(panel.gatewayDetails, true)
+      verify(find(panel, function(x) { return x.text === "Weekly: 0% remaining"; }) !== null)
+      button.clicked()
+      compare(panel.gatewayDetails, false)
+      usage.agents = [{record: {id: "gateway", name: "AI Gateway", limits: [], usageStatusText: "Gateway limits unavailable",
+        authHelpText: "Could not read subscription limits", gateway: {accounts: [], pools: [], errors: 0, disabled: 0}}}]
+      usage.recordsChanged()
+      compare(panel.providers.length, 1)
+      compare(panel.heroMeta(panel.provider), "Gateway limits unavailable")
+      panel.close()
+    }
+
     function test_states() {
       panel.Window.window.width = 440
       panel.Window.window.height = 720
@@ -168,14 +201,14 @@ Item {
       verify(usage !== null)
       usage.agents = [
         {record: record("claude", "Claude Code", "Max", 100, 200)},
-        {record: record("codex", "Codex", "Pro", 100, 200)},
-        {record: record("opencode", "OpenCode", "Ninitux AI", 100, 200)},
+        {record: record("fixture", "Fixture", "Pro", 100, 200)},
+        {record: record("missing", "Missing", "Ninitux AI", 100, 200)},
         {record: record("pi", "Pi", "All-time cache hit 90.0%", 10, 90)}]
       usage.recordsChanged()
       panel.selectedProviderId = ""
       panel.open()
       tryCompare(panel, "opened", true)
-      compare(panel.providers.map(function(p) { return p.providerId; }).join(","), "pi,claude,codex,opencode")
+      compare(panel.providers.map(function(p) { return p.providerId; }).join(","), "pi,claude,fixture,missing")
       compare(panel.provider.providerId, "pi")
       compare(panel.heroMeta(panel.provider), "All-time cache hit 90.0%")
       var card = find(panel, function(x) { return x.contentWidth !== undefined && x.focusTarget !== undefined; })

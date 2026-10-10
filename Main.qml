@@ -144,7 +144,7 @@ Item {
   }
 
   function updateCommand(kind, agentIds) {
-    var command = ["omarchy-agent-usage-update"]
+    var command = ["omarchy-agent-usage-update", "--except", "codex", "--except", "opencode"]
     if (kind === "force") command.push("--force")
     if (kind === "limits") command.push("--limits-only")
     var providers = settings && settings.providers ? settings.providers : {}
@@ -217,6 +217,7 @@ Item {
   }
 
   function providerEnabled(id) {
+    if (id === "codex" || id === "opencode") return false
     if (!settings || !settings.providers || !settings.providers[id]) return true
     return settings.providers[id].enabled !== false
   }
@@ -227,7 +228,7 @@ Item {
     return numberValue(p.totalPrompts) > 0 || numberValue(p.totalSessions) > 0
       || numberValue(p.activeDays) > 0 || numberValue(p.todayPrompts) > 0
       || numberValue(p.todaySessions) > 0 || (p.limits && p.limits.length > 0)
-      || !!p.balance
+      || !!p.balance || !!p.gateway || String(p.usageStatusText || "") !== ""
   }
 
   // A prepaid agent's credit ledger. Like rate limits, the balance is
@@ -262,7 +263,9 @@ Item {
       // across devices.
       limits: Array.isArray(record.limits) ? record.limits : [],
       tierLabel: String(record.tierLabel || ""),
+      updatedAt: String(record.updatedAt || ""),
       balance: balanceValue(record.balance),
+      gateway: record.id === "gateway" ? record.gateway || null : null,
 
       todayPrompts: synced ? numberValue(stats.todayPrompts) : numberValue(record.todayPrompts),
       todaySessions: synced ? numberValue(stats.todaySessions) : numberValue(record.todaySessions),

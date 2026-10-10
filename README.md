@@ -14,6 +14,34 @@ collectors come from the Omarchy distribution. There is no standalone installer
 or release package here; use this source only with the native Omarchy plugin
 system and compatible usage records. No setup command is executed automatically.
 
+## AI Gateway subscription limits
+
+An optional `gateway` record adds a separate AI Gateway tab. It displays the
+Antigravity pool as available account-equivalents, grouped by plan and quota
+window, and expandable per-account Antigravity, Codex and xAI windows. Local
+Codex and OpenCode records are excluded from this clone's tabs and update commands;
+those exclusions do not control subscriptions inside the gateway.
+Unknown remaining quota stays unknown; error and disabled counts remain visible.
+The pool is not a token or billing balance. Existing Pi and Claude views are unchanged.
+
+`scripts/gateway-usage.py` runs the existing DSH collector over a configured,
+host-key-verified SSH connection. Its management secret remains on the DSH host;
+no key-management UI or inference request is added. This adapter uses the collector
+contract from [ai-gateway revision ac0ef6e](https://github.com/PavelLizunov/ai-gateway/tree/ac0ef6efdd2a53a33bd12498f236d1b6cfd521e6/plugins/dsh-cpamc-limits).
+It limits remote duration, HTTP requests, response bytes and emitted data. Account
+labels omit email addresses. The DSH collector is external and must already be
+installed, with its existing secret store and read-only quota routes available.
+
+Configure `~/.config/omarchy/agents/gateway.json` outside Git with `sshHost`,
+`remoteUser`, `collectorPath`, `secretFile`, and `gatewayUrl`. The host must allow
+the existing user to run the collector as `remoteUser` through noninteractive sudo.
+The adapter uses the remote `/usr/local/bin/node` and `/usr/bin/timeout`. Attach it
+to your existing usage updater as `gateway`; this repository does not replace the
+updater or install credentials automatically. On collection failure the tab shows
+an explicit unavailable state rather than retaining apparently fresh limits.
+
+Run `python3 -B tests/test_gateway.py` for offline normalization checks.
+
 The initial comparison base is stable Omarchy `v4.0.4`, commit
 `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`. All nine original Agents files match
 that release byte-for-byte. This establishes a reproducible update base, not
