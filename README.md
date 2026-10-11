@@ -20,10 +20,12 @@ An optional `gateway` record adds a separate AI Gateway tab. It displays the
 subscription limits using the same native hero and limit rows as Claude Code.
 Gemini and Claude/GPT are separate Antigravity quota pools; Codex is a separate
 OpenAI subscription source, with an account switch rather than averaged quotas.
-Only the selected source's windows are shown. Percentages mean used allowance,
-matching the existing Claude Code page; missing quota stays unknown. Antigravity
-pool usage is one minus available account-equivalents divided by compatible
-accounts. It is not a token balance or any single account's quota. Provider keys
+Only the selected source's windows are shown. Gateway percentages and bars mean
+remaining allowance, matching Quota Management: a reset to full quota is 100%,
+not 0%. The section is labeled `LIMITS · REMAINING`; low remaining quota triggers
+the warning color. Claude Code's existing used-allowance semantics are unchanged.
+Missing quota stays unknown. Antigravity pool remaining quota is available
+account-equivalents divided by compatible accounts. It is not a token balance or any single account's quota. Provider keys
 and model IDs are retained because upstream display labels can be identical.
 No custom dashboard, verbose explanations or expandable account lists are shown. Local
 Codex and OpenCode records are excluded from this clone's tabs and update commands;

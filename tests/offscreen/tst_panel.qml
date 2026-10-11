@@ -185,28 +185,28 @@ Item {
       compare(panel.limits.length, 2)
       compare(panel.limits[0].title, "Session (5h)")
       compare(panel.limits[0].percent, 0.5)
-      compare(panel.limits[1].percent, 0.25)
+      compare(panel.limits[1].percent, 0.75)
       var switchButton = find(panel, function(x) { return x.text === "Claude/GPT" && x.clicked !== undefined; })
       verify(switchButton !== null)
       switchButton.clicked()
       compare(panel.gatewayName(), "Claude & GPT")
       compare(panel.limits.length, 2)
-      fuzzyCompare(panel.limits[0].percent, 0.1, 0.0001)
-      compare(panel.limits[1].percent, 0.75)
+      fuzzyCompare(panel.limits[0].percent, 0.9, 0.0001)
+      compare(panel.limits[1].percent, 0.25)
       switchButton = find(panel, function(x) { return x.text === "Codex" && x.clicked !== undefined; })
       verify(switchButton !== null)
       switchButton.clicked()
       compare(panel.gatewayName(), "Codex")
       compare(panel.gatewayPlan(), "OpenAI · plus")
       compare(panel.limits.length, 2)
-      compare(panel.limits[0].percent, 1)
+      compare(panel.limits[0].percent, 0)
       var accountButton = find(panel, function(x) { return x.text === "Account 1 of 2" && x.clicked !== undefined; })
       verify(accountButton !== null)
       accountButton.clicked()
       compare(panel.gatewayPlan(), "OpenAI · pro")
       compare(panel.limits.length, 1)
       compare(panel.limits[0].title, "Weekly")
-      fuzzyCompare(panel.limits[0].percent, 0.2, 0.0001)
+      fuzzyCompare(panel.limits[0].percent, 0.8, 0.0001)
       usage.agents[0].record.gateway.accounts[1].windows[0].remainingPercent = null
       usage.recordsChanged()
       compare(panel.limits[0].percent, -1)
@@ -220,6 +220,48 @@ Item {
       usage.recordsChanged()
       compare(panel.limits.length, 0)
       compare(panel.heroMeta(panel.provider), "Gateway limits unavailable")
+      panel.close()
+    }
+
+    function test_gateway_reset_remaining() {
+      var usage = find(panel, function(x) { return typeof x.displayProvider === "function"; })
+      var account = {provider: "codex", authIndex: "reset", plan: "plus", status: "available",
+        windows: [{key: "codex:code:primary:18000", remainingPercent: 0, resetsAt: "2026-10-11T13:00:00Z"},
+          {key: "codex:code:secondary:604800", remainingPercent: 36}]}
+      usage.agents = [{record: {id: "gateway", name: "AI Gateway", ready: true, limits: [], gateway: {
+        accounts: [account], pools: [{model: "gemini-5h", total: 2, available: 2}], errors: 0, disabled: 0}}}]
+      usage.recordsChanged()
+      panel.selectedProviderId = "gateway"
+      panel.gatewaySource = "codex"
+      panel.open()
+      wait(0)
+      var row = find(panel, function(x) { return x.window !== undefined && x.window && x.window.title === "Session (5h)"; })
+      verify(row !== null)
+      compare(row.window.percent, 0)
+      compare(row.alarming, true)
+      account.windows[0].remainingPercent = 100
+      account.windows[0].resetsAt = "2030-01-01T00:00:00Z"
+      account.windows[1].remainingPercent = 84
+      usage.recordsChanged()
+      tryVerify(function() {
+        row = find(panel, function(x) { return x.window !== undefined && x.window && x.window.title === "Session (5h)"; })
+        return row !== null && row.window.percent === 1
+      })
+      compare(row.alarming, false)
+      verify(find(row, function(x) { return x.text === "100%"; }) !== null)
+      fuzzyCompare(panel.limits[1].percent, 0.84, 0.0001)
+      panel.gatewaySource = "gemini"
+      compare(panel.limits[0].percent, 1)
+      compare(panel.limits[0].remaining, true)
+      usage.agents = [{record: {id: "claude", name: "Claude Code", ready: true,
+        limits: [{label: "Session (5-hour)", percent: 0.95}]}}]
+      usage.recordsChanged()
+      panel.selectedProviderId = "claude"
+      compare(panel.limits[0].percent, 0.95)
+      wait(0)
+      row = find(panel, function(x) { return x.window !== undefined && x.window && x.window.title === "Session"; })
+      verify(row !== null)
+      compare(row.alarming, true)
       panel.close()
     }
 

@@ -74,15 +74,15 @@ Panel {
       return account.windows.map(function(w) {
         var seconds = Number(String(w.key || "").split(":").pop())
         return {title: seconds === 604800 ? "Weekly" : seconds === 18000 ? "Session (5h)" : String(w.label),
-          percent: typeof w.remainingPercent === "number" && isFinite(w.remainingPercent) && w.remainingPercent >= 0 && w.remainingPercent <= 100 ? 1 - w.remainingPercent / 100 : -1,
-          resetAt: String(w.resetsAt || "")}
+          percent: typeof w.remainingPercent === "number" && isFinite(w.remainingPercent) && w.remainingPercent >= 0 && w.remainingPercent <= 100 ? w.remainingPercent / 100 : -1,
+          remaining: true, resetAt: String(w.resetsAt || "")}
       }).sort(function(a, b) { return (a.title === "Weekly" ? 1 : 0) - (b.title === "Weekly" ? 1 : 0); })
     }
     var prefix = source === "gemini" ? "gemini-" : "3p-"
     return data.pools.filter(function(p) { return String(p.model || "").indexOf(prefix) === 0; }).map(function(p) {
       return {title: String(p.model).endsWith("weekly") ? "Weekly" : "Session (5h)",
-        percent: typeof p.available === "number" && isFinite(p.available) && typeof p.total === "number" && isFinite(p.total) && p.total > 0 && p.available >= 0 && p.available <= p.total ? 1 - p.available / p.total : -1,
-        resetAt: String(p.resetsAt || "")}
+        percent: typeof p.available === "number" && isFinite(p.available) && typeof p.total === "number" && isFinite(p.total) && p.total > 0 && p.available >= 0 && p.available <= p.total ? p.available / p.total : -1,
+        remaining: true, resetAt: String(p.resetsAt || "")}
     }).sort(function(a, b) { return (a.title === "Weekly" ? 1 : 0) - (b.title === "Weekly" ? 1 : 0); })
   }
 
@@ -707,7 +707,7 @@ Panel {
             spacing: Style.space(10)
 
             PanelSectionHeader {
-              text: "LIMITS"
+              text: root.gateway ? "LIMITS · REMAINING" : "LIMITS"
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -817,7 +817,8 @@ Panel {
     id: limitRow
     property var window: null
 
-    readonly property bool alarming: window && window.percent >= 0.9
+    readonly property bool alarming: !!window && window.percent >= 0
+      && (window.remaining === true ? window.percent <= 0.1 : window.percent >= 0.9)
 
     spacing: Style.space(6)
 
@@ -875,7 +876,7 @@ Panel {
     }
   }
 
-  // Rounded track showing the percentage of the allowance used.
+  // The row owns whether this ratio represents used or remaining allowance.
   component Meter: Item {
     id: meter
     property real value: -1
