@@ -12,7 +12,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / 'tests/offscreen'
-DEFAULT_TESTS = ['test_cache_contract', 'test_provider_order_and_clicks',
+DEFAULT_TESTS = ['test_cache_contract', 'test_bundled_icons', 'test_provider_order_and_clicks',
                  'test_missing_icon_then_pi', 'test_same_provider_fallback', 'test_states']
 
 

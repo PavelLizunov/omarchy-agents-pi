@@ -86,6 +86,34 @@ Item {
       verify(String(panel.iconCandidatesForProvider({providerId: "pi"}, "#ffffff")[0]).endsWith("/assets/pi.svg"))
     }
 
+    function test_bundled_icons() {
+      compare(panel.iconCandidatesForProvider(null).length, 0)
+      for (var surface of [Qt.rgba(1, 1, 1, 1), Qt.rgba(0.07, 0.07, 0.07, 1)]) {
+        for (var id of ["pi", "claude", "codex", "fireworks", "grok"]) {
+          var candidates = panel.iconCandidatesForProvider({providerId: id}, surface)
+          compare(candidates.length, 1, id + " must use one bundled asset")
+          var light = panel.colorLuminance(surface) >= 0.5 && (id === "codex" || id === "grok")
+          verify(String(candidates[0]).endsWith("/assets/" + id + (light ? "-light" : "") + ".svg"))
+        }
+        for (var missing of ["kimi", "missing", "../outside"])
+          compare(panel.iconCandidatesForProvider({providerId: missing}, surface).length, 0)
+      }
+      var usage = find(panel, function(x) { return typeof x.displayProvider === "function"; })
+      usage.agents = [{record: record("grok", "Grok", "Pro", 100, 200)}]
+      usage.recordsChanged()
+      var hero = find(panel, function(x) { return x.candidatesKey !== undefined; })
+      verify(hero !== null)
+      var image = find(hero, function(x) { return x.source !== undefined && x.fillMode !== undefined; })
+      verify(image !== null)
+      tryCompare(image, "status", Image.Ready)
+      usage.agents = [{record: record("kimi", "Kimi", "Pro", 100, 200)}]
+      usage.recordsChanged()
+      tryCompare(image, "status", Image.Null)
+      compare(String(image.source), "")
+      var glyph = find(hero, function(x) { return x.text === "󱚣"; })
+      verify(glyph !== null && glyph.visible)
+    }
+
     function test_provider_order_and_clicks() {
       var usage = find(panel, function(x) { return typeof x.displayProvider === "function"; })
       verify(usage !== null)

@@ -16,6 +16,14 @@ update automation are published under the same MIT license; upstream copyright
 and meaningful original comments are preserved. Provider names and logos remain
 identifiers of their respective projects, not an endorsement or trademark grant.
 
+## Omarchy 4.5 compatibility
+
+`assets/grok.svg` and `assets/grok-light.svg` were copied byte-for-byte from
+Omarchy package `4.5.0rc1-1`, `shell/plugins/agents/assets`, on 2026-10-20.
+The original stable snapshot remains unchanged. Provider icon selection uses only
+bundled assets; an unbundled provider keeps the existing bar-glyph fallback.
+Explicit `Commons.Color` references avoid Qt 6.12's `QtQuick.Color` name collision.
+
 ## Test dependency closure
 
 `tests/offscreen/imports` contains 29 hash-pinned files. Seventeen host QML/JS

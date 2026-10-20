@@ -3,6 +3,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 Panel {
@@ -11,11 +12,11 @@ Panel {
   ipcTarget: "omarchy.agents"
   manageIpc: false
 
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
-  readonly property color surface: Color.popups.background
-  readonly property color track: Style.selectedFillFor(foreground, Color.accent)
+  readonly property color surface: Commons.Color.popups.background
+  readonly property color track: Style.selectedFillFor(foreground, Commons.Color.accent)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property var providers: usage.enabledProviders
@@ -291,17 +292,16 @@ Panel {
       + 0.0722 * colorChannelLuminance(color.b)
   }
 
-  // Marks resolve by convention, so a new agent's data file needs nothing
-  // from this panel: assets/<id>.svg if it ships one, the module's bar glyph
-  // if it doesn't.
+  // New host collectors may have no bundled mark in this clone. Use the
+  // existing glyph instead of requesting nonexistent files on every refresh.
   function iconCandidatesForProvider(p, surfaceColor) {
     if (!p) return []
     if (p.providerId === "pi") return [Qt.resolvedUrl("assets/pi.svg")]
-    var candidates = []
-    if (colorLuminance(surfaceColor || Color.background) >= 0.5)
-      candidates.push(Qt.resolvedUrl("assets/" + p.providerId + "-light.svg"))
-    candidates.push(Qt.resolvedUrl("assets/" + p.providerId + ".svg"))
-    return candidates
+    var id = p.providerId
+    if (["claude", "codex", "fireworks", "grok"].indexOf(id) < 0) return []
+    var light = (id === "codex" || id === "grok")
+      && colorLuminance(surfaceColor || Commons.Color.background) >= 0.5
+    return [Qt.resolvedUrl("assets/" + id + (light ? "-light" : "") + ".svg")]
   }
 
   // Nothing to report, nothing in the bar: Bar.qml collapses a slot whose item
@@ -343,6 +343,11 @@ Panel {
     function toggle(): void { root.toggle() }
     function refresh(): string { root.refreshNow(); return "ok" }
     function next(): string { root.selectProvider(root.providerIndex + 1); return "ok" }
+    function iconStatus(): string {
+      return JSON.stringify({source: String(Qt.resolvedUrl(".")), revision: "bundled-v1",
+        selected: root.provider ? root.provider.providerId : "",
+        candidates: root.iconCandidatesForProvider(root.provider, root.surface)})
+    }
   }
 
   BarIconButton {
